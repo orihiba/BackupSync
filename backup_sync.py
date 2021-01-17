@@ -1,11 +1,13 @@
 import sys
-from os import walk
-from os.path import getmtime, join, isdir, exists
+from os import walk, system
+from os.path import getmtime, join, isdir, exists, isfile
 from time import ctime
 from shutil import copytree, copy2
 
-g_new_dirs = []
+IGNORELIST_PATH = ".ignorelist"
 
+g_new_dirs = []
+g_ignorelist = []
 
 def copy_item(src, dst, file_or_dir):
     if file_or_dir == "dir":
@@ -15,12 +17,19 @@ def copy_item(src, dst, file_or_dir):
 
 
 def should_copy(src_file, dst_file, file_or_dir):
+    # Check ignorelist
+    if src_file in g_ignorelist:
+        return False
+    
     # New item
     if not exists(dst_file):
         if file_or_dir == "dir":
             g_new_dirs.append(src_file)
     
-        ans = input("New %s: %s (date: %s).\n\tCopy to %s? [y] " % (file_or_dir, src_file, ctime(getmtime(src_file)), dst_file))
+        ans = input("New %s: %s (date: %s).\n\tCopy to %s? [y] {i to ignore item and add to ignorelist} " % (file_or_dir, src_file, ctime(getmtime(src_file)), dst_file))
+        if ans == "i":
+            add_to_ignorelist(src_file)           
+        
         return ans == "y" or len(ans) == 0
        
     # Updated item
@@ -56,8 +65,37 @@ def should_skip_dir(cur_dir):
         if dir in cur_dir:
             return True
             
-        
+    if cur_dir in g_ignorelist:
+        return True
+
+
+def get_ignorelist():
+    if not isfile(IGNORELIST_PATH):
+        return
+
+    with open(IGNORELIST_PATH, "rb") as f:
+        for item in list(f):
+            g_ignorelist.append(str(item.strip().decode('UTF-8')))
+    
+
+def add_to_ignorelist(filename):
+    g_ignorelist.append(filename)
+    
+    # Create ignorelist file if doesn't exist
+    if not isfile(IGNORELIST_PATH):
+        with open(IGNORELIST_PATH, "w") as f:
+            pass
+        system("attrib +h " + IGNORELIST_PATH)
+    
+    # Update ignorelist file
+    with open(IGNORELIST_PATH, "ab") as f:
+        data = bytes(filename + "\n", 'UTF-8')
+        f.write(data)
+     
+     
 def main(src_dir, bk_dir):
+    get_ignorelist()
+
     for root, dirs, files in walk(src_dir, topdown=True):
         if should_skip_dir(root):
             continue
